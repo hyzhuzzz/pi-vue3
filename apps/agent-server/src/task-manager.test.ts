@@ -75,9 +75,11 @@ describe("TaskManager", () => {
 
 	it("replays a fast completed task from sequence one without gaps", async () => {
 		const runtime: AgentRuntime = {
-			run: async ({ callbacks: { onMessageStart, onTextDelta, onMessageEnd } }) => {
+			run: async ({ callbacks: { onMessageStart, onTextDelta, onMessageEnd, onToolStart, onToolEnd } }) => {
 				const id = await onMessageStart();
 				await onTextDelta(id, "Ready");
+				await onToolStart("tool-1", "get_demo_items", { query: "Vue" });
+				await onToolEnd("tool-1", { content: [{ type: "text", text: "Vue 3" }] }, false);
 				await onMessageEnd(id);
 			},
 		};
@@ -86,15 +88,21 @@ describe("TaskManager", () => {
 		await manager.waitForTask(snapshot.taskId);
 		const replay = await manager.replay(snapshot.taskId, 0);
 
-		expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6]);
+		expect(replay.events.map((event) => event.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 		expect(replay.events.map((event) => event.type)).toEqual([
 			"task.status",
 			"message.upserted",
 			"message.upserted",
 			"message.delta",
+			"tool.upserted",
+			"tool.upserted",
 			"message.upserted",
 			"task.status",
 		]);
+		expect(replay.events[2]).toMatchObject({ type: "message.upserted", payload: { message: { text: "", status: "streaming" } } });
+		expect(replay.events[4]).toMatchObject({ type: "tool.upserted", payload: { tool: { id: "tool-1", status: "running" } } });
+		expect(replay.events[5]).toMatchObject({ type: "tool.upserted", payload: { tool: { id: "tool-1", status: "completed", result: { text: "Vue 3", details: {} } } } });
+		expect(replay.events[6]).toMatchObject({ type: "message.upserted", payload: { message: { text: "Ready", status: "completed" } } });
 		expect(replay.snapshot.status).toBe("completed");
 	});
 

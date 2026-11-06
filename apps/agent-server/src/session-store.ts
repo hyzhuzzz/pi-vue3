@@ -72,7 +72,7 @@ function makeEvent(
 		traceId: task.traceId,
 		seq: task.seq,
 		occurredAt: new Date().toISOString(),
-		payload,
+		payload: structuredClone(payload),
 	} as AssistantEvent;
 	task.events.push(event);
 	return event;

@@ -38,7 +38,7 @@ function appendEvent(
 		traceId: task.traceId,
 		seq: task.seq,
 		occurredAt: new Date().toISOString(),
-		payload,
+		payload: structuredClone(payload),
 	} as AssistantEvent;
 	task.events.push(event);
 	if (task.events.length > MAX_EVENT_COUNT) task.events.splice(0, task.events.length - MAX_EVENT_COUNT);
