@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { ElIcon } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -30,6 +30,11 @@ const isOpen = defineModel<boolean>('open', { default: false });
 const expanded = ref(false);
 const assistant = useAssistant(props.baseUrl, () => props.pageContext);
 const markdown = new MarkdownIt({ html: false, linkify: true, breaks: true, typographer: false });
+const dismissedTaskErrorId = ref<string | null>(null);
+
+watch(() => assistant.currentTask.value?.taskId ?? null, (taskId, previousTaskId) => {
+  if (taskId !== previousTaskId) dismissedTaskErrorId.value = null;
+});
 
 type TimelineItem =
   | { kind: 'message'; id: string; createdAt: string; message: ChatMessage }
@@ -65,6 +70,18 @@ const statusLabel = computed(() => {
 });
 
 const selectedTitle = computed(() => assistant.currentSession.value?.title ?? '新对话');
+const taskFailureMessage = computed(() => {
+  const task = assistant.currentTask.value;
+  if (!task || task.status !== 'failed' || dismissedTaskErrorId.value === task.taskId) return null;
+  return task.error?.message || '任务未能完成，请检查服务配置后重试。';
+});
+const visibleError = computed(() => assistant.error.value ?? taskFailureMessage.value);
+
+function dismissError(): void {
+  const task = assistant.currentTask.value;
+  if (task?.status === 'failed' && taskFailureMessage.value) dismissedTaskErrorId.value = task.taskId;
+  assistant.error.value = null;
+}
 
 function renderMarkdown(source: string): string {
   const html = markdown.render(source || '');
@@ -287,10 +304,10 @@ onMounted(() => {
             <span><strong>模型尚未配置</strong><small>服务已启动，配置模型后即可开始对话。</small></span>
           </div>
 
-          <div v-if="assistant.error.value" class="assistant-error" role="alert">
-            <span>{{ assistant.error.value }}</span>
+          <div v-if="visibleError" class="assistant-error" role="alert">
+            <span>{{ visibleError }}</span>
             <button class="error-retry" v-if="assistant.retryText.value" @click="assistant.send(assistant.retryText.value)"><Refresh /> 重试</button>
-            <button class="icon-button error-dismiss" aria-label="关闭错误提示" @click="assistant.error.value = null"><Close /></button>
+            <button class="icon-button error-dismiss" aria-label="关闭错误提示" @click="dismissError"><Close /></button>
           </div>
 
           <div class="conversation-scroll" :class="{ 'with-sidebar-mode': expanded }">

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,6 +36,44 @@ afterEach(async () => {
 });
 
 describe("assistant API", () => {
+	it("serves the built Vue app and assets without exposing workspace files or masking 404s", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-agent-static-"));
+		roots.push(root);
+		const workspaceRoot = join(root, "workspace");
+		const distRoot = join(workspaceRoot, "apps", "web", "dist");
+		await mkdir(join(distRoot, "assets"), { recursive: true });
+		await writeFile(join(distRoot, "index.html"), "<!doctype html><main id=\"app\">built Vue app</main>");
+		await writeFile(join(distRoot, "assets", "app.js"), "window.appReady = true;");
+		await writeFile(join(workspaceRoot, ".env"), "PRIVATE_WORKSPACE_SECRET");
+		await mkdir(join(workspaceRoot, ".data"), { recursive: true });
+		await writeFile(join(workspaceRoot, ".data", "session.jsonl"), "PRIVATE_SESSION_DATA");
+
+		const app = await buildApp({ config: config(workspaceRoot, false), runtime });
+		const home = await app.inject({ method: "GET", url: "/", headers: local });
+		const asset = await app.inject({ method: "GET", url: "/assets/app.js", headers: local });
+		const health = await app.inject({ method: "GET", url: "/api/assistant/health", headers: local });
+		const missingApi = await app.inject({ method: "GET", url: "/api/assistant/not-a-route", headers: local });
+		const missingAsset = await app.inject({ method: "GET", url: "/assets/not-found.js", headers: local });
+		const envFile = await app.inject({ method: "GET", url: "/.env", headers: local });
+		const dataFile = await app.inject({ method: "GET", url: "/.data/session.jsonl", headers: local });
+
+		expect(home.statusCode).toBe(200);
+		expect(home.headers["content-type"]).toContain("text/html");
+		expect(home.body).toContain("built Vue app");
+		expect(asset.statusCode).toBe(200);
+		expect(asset.body).toBe("window.appReady = true;");
+		expect(health.statusCode).toBe(200);
+		expect(health.headers["content-type"]).toContain("application/json");
+		expect(health.json()).toEqual({ status: "ok", configured: false });
+		expect(missingApi.statusCode).toBe(404);
+		expect(missingApi.headers["content-type"]).toContain("application/json");
+		expect(missingApi.body).not.toContain("built Vue app");
+		expect(missingAsset.statusCode).toBe(404);
+		expect(missingAsset.body).not.toContain("built Vue app");
+		expect(envFile.statusCode).toBe(404);
+		expect(dataFile.statusCode).toBe(404);
+	});
+
 	it("reports missing model configuration without exposing provider credentials", async () => {
 		const app = await appFor(false);
 		const health = await app.inject({ method: "GET", url: "/api/assistant/health", headers: local });

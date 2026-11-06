@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep, join } from "node:path";
+import { lstat, mkdir, readFile, realpath, rename, unlink, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve, sep, join } from "node:path";
 import type {
 	AssistantEvent,
 	ChatMessage,
@@ -85,7 +85,12 @@ function titleFromText(text: string): string {
 
 function inside(root: string, candidate: string): boolean {
 	const rel = relative(root, candidate);
-	return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+	return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+function insideOrEqual(root: string, candidate: string): boolean {
+	const rel = relative(root, candidate);
+	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 export class SessionStore {
@@ -257,13 +262,68 @@ export class SessionStore {
 			if (session.activeTaskId) {
 				throw new HttpError(409, "active_task_conflict", "Stop the active task before deleting this session.");
 			}
+			await this.removePiSessionFile(session.piSessionFile);
+			const removedTasks = Object.entries(this.state.tasks).filter(([, task]) => task.sessionId === sessionId);
 			delete this.state.sessions[sessionId];
 			for (const [taskId, task] of Object.entries(this.state.tasks)) {
 				if (task.sessionId === sessionId) delete this.state.tasks[taskId];
 			}
-			await this.persist();
+			try {
+				await this.persist();
+			} catch (error) {
+				this.state.sessions[sessionId] = session;
+				for (const [taskId, task] of removedTasks) this.state.tasks[taskId] = task;
+				throw error;
+			}
 			return true;
 		});
+	}
+
+	private async removePiSessionFile(sessionFile: string | undefined): Promise<void> {
+		if (!sessionFile) return;
+
+		const sessionRoot = resolve(this.sessionDir);
+		const candidate = resolve(sessionFile);
+		if (!isAbsolute(sessionFile) || !inside(sessionRoot, candidate)) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+
+		const dataRootReal = await realpath(this.dataDir);
+		const sessionRootInfo = await lstat(sessionRoot);
+		if (!sessionRootInfo.isDirectory() || sessionRootInfo.isSymbolicLink()) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+		const sessionRootReal = await realpath(sessionRoot);
+		if (!inside(dataRootReal, sessionRootReal)) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+
+		let parentReal: string;
+		try {
+			parentReal = await realpath(dirname(candidate));
+		} catch (error) {
+			if (isFileNotFound(error)) return;
+			throw error;
+		}
+		if (!insideOrEqual(sessionRootReal, parentReal)) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+
+		let candidateInfo;
+		try {
+			candidateInfo = await lstat(candidate);
+		} catch (error) {
+			if (isFileNotFound(error)) return;
+			throw error;
+		}
+		if (!candidateInfo.isFile() || candidateInfo.isSymbolicLink()) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+		const candidateReal = await realpath(candidate);
+		if (!inside(sessionRootReal, candidateReal)) {
+			throw new HttpError(500, "session_storage_error", "The session transcript could not be safely deleted.");
+		}
+		await unlink(candidate);
 	}
 
 	async startTask(input: StartTaskInput): Promise<StartTaskResult> {

@@ -1,4 +1,7 @@
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import fastifyStatic from "@fastify/static";
 import {
 	ASSISTANT_API_PREFIX,
 	isTerminalTaskStatus,
@@ -304,6 +307,16 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 			heartbeat.unref?.();
 		});
 	}, { prefix: ASSISTANT_API_PREFIX });
+
+	const webDistRoot = resolve(config.workspaceRoot, "apps", "web", "dist");
+	if (existsSync(join(webDistRoot, "index.html"))) {
+		app.register(fastifyStatic, {
+			root: webDistRoot,
+			prefix: "/",
+			index: ["index.html"],
+			wildcard: true,
+		});
+	}
 
 	return app;
 }

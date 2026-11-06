@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -80,5 +80,56 @@ describe("SessionStore", () => {
 		expect(duplicate.created).toBe(false);
 		expect(duplicate.task.taskId).toBe(first.task.taskId);
 		expect((await store.getSession(session.sessionId))?.messages).toHaveLength(1);
+	});
+
+	it("deletes the owned Pi transcript and tolerates an already-missing transcript", async () => {
+		const store = await createStore();
+		const session = await store.createSession("Transcript cleanup");
+		const transcriptPath = join(store.sessionDir, "owned-session.jsonl");
+		await writeFile(transcriptPath, "owned transcript");
+		await store.setPiSessionFile(session.sessionId, transcriptPath);
+
+		expect(await store.deleteSession(session.sessionId)).toBe(true);
+		await expect(readFile(transcriptPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+
+		const missingTranscriptSession = await store.createSession("Missing transcript");
+		await store.setPiSessionFile(missingTranscriptSession.sessionId, join(store.sessionDir, "already-missing.jsonl"));
+		expect(await store.deleteSession(missingTranscriptSession.sessionId)).toBe(true);
+	});
+
+	it("refuses to delete a transcript path persisted outside the owned Pi session directory", async () => {
+		const store = await createStore();
+		const session = await store.createSession("Escaped transcript");
+		const outsidePath = join(store.dataDir, "outside-session.jsonl");
+		await writeFile(outsidePath, "preserve outside transcript");
+		const metadataPath = join(store.dataDir, "metadata.json");
+		const state = JSON.parse(await readFile(metadataPath, "utf8")) as {
+			sessions: Record<string, { piSessionFile?: string }>;
+		};
+		state.sessions[session.sessionId]!.piSessionFile = outsidePath;
+		await writeFile(metadataPath, JSON.stringify(state));
+
+		const restarted = new SessionStore({ dataDir: store.dataDir });
+		await restarted.init();
+		await expect(restarted.deleteSession(session.sessionId)).rejects.toThrow();
+
+		expect(await readFile(outsidePath, "utf8")).toBe("preserve outside transcript");
+		expect(restarted.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
+	});
+
+	it("refuses to delete a transcript reached through a directory symlink escape", async () => {
+		const store = await createStore();
+		const session = await store.createSession("Symlink escape");
+		const outsideDir = join(store.dataDir, "outside");
+		await mkdir(outsideDir);
+		const outsidePath = join(outsideDir, "linked-session.jsonl");
+		await writeFile(outsidePath, "preserve symlink target");
+		const linkPath = join(store.sessionDir, "redirect");
+		await symlink(outsideDir, linkPath, process.platform === "win32" ? "junction" : "dir");
+		await store.setPiSessionFile(session.sessionId, join(linkPath, "linked-session.jsonl"));
+
+		await expect(store.deleteSession(session.sessionId)).rejects.toThrow();
+		expect(await readFile(outsidePath, "utf8")).toBe("preserve symlink target");
+		expect(store.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
 	});
 });
