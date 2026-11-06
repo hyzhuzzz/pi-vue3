@@ -75,7 +75,7 @@
 - [x] Visually inspect desktop and narrow viewport; fix actual layout or interaction problems.
 - [x] Add usage/extension/start/build/deploy/test instructions, environment example and Windows/Linux notes. Include distinction between mock and real checks.
 - [x] Fresh final code review and fix real findings; rerun affected checks.
-- [ ] Scan tracked files for credentials, commit and upload to user-authorized GitHub repo. Verify remote tree/commit. Do not print/store secret in committed report.
+- [x] Scan tracked files for credentials, commit and upload to user-authorized GitHub repo. Verify remote tree/commit. Do not print/store secret in committed report.
 
 ## Execution rulings
 
