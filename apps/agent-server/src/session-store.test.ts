@@ -132,4 +132,47 @@ describe("SessionStore", () => {
 		expect(await readFile(outsidePath, "utf8")).toBe("preserve symlink target");
 		expect(store.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
 	});
+
+	it("keeps transcript bytes and usable metadata when the metadata commit fails", async () => {
+		const store = await createStore();
+		const session = await store.createSession("Persistence rollback");
+		const transcriptPath = join(store.sessionDir, "persist-failure.jsonl");
+		await writeFile(transcriptPath, "keep this transcript");
+		await store.setPiSessionFile(session.sessionId, transcriptPath);
+		const storage = store as unknown as { persist: () => Promise<void> };
+		storage.persist = async () => { throw new Error("simulated metadata write failure"); };
+
+		await expect(store.deleteSession(session.sessionId)).rejects.toThrow("simulated metadata write failure");
+		expect(await readFile(transcriptPath, "utf8")).toBe("keep this transcript");
+		expect(store.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
+
+		const restarted = new SessionStore({ dataDir: store.dataDir });
+		await restarted.init();
+		expect(restarted.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
+	});
+
+	it("restores persisted metadata when transcript removal fails", async () => {
+		const store = await createStore();
+		const session = await store.createSession("Removal rollback");
+		const transcriptPath = join(store.sessionDir, "unlink-failure.jsonl");
+		await writeFile(transcriptPath, "keep after unlink failure");
+		await store.setPiSessionFile(session.sessionId, transcriptPath);
+		const metadataPath = join(store.dataDir, "metadata.json");
+		const deletion = store as unknown as { removePiSessionFile: (path: string | undefined) => Promise<void> };
+		deletion.removePiSessionFile = async () => {
+			const pending = JSON.parse(await readFile(metadataPath, "utf8")) as { sessions: Record<string, unknown> };
+			if (pending.sessions[session.sessionId] !== undefined) {
+				throw new Error("metadata deletion was not committed before transcript removal");
+			}
+			throw new Error("simulated transcript removal failure");
+		};
+
+		await expect(store.deleteSession(session.sessionId)).rejects.toThrow("simulated transcript removal failure");
+		expect(await readFile(transcriptPath, "utf8")).toBe("keep after unlink failure");
+		expect(store.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
+
+		const restarted = new SessionStore({ dataDir: store.dataDir });
+		await restarted.init();
+		expect(restarted.getSession(session.sessionId)?.sessionId).toBe(session.sessionId);
+	});
 });

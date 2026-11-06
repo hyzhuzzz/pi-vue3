@@ -148,9 +148,9 @@ export class SessionStore {
 		return pending;
 	}
 
-	private async persist(): Promise<void> {
+	private async persist(state: PersistedState = this.state): Promise<void> {
 		const temporaryPath = `${this.metadataPath}.${process.pid}.${randomUUID()}.tmp`;
-		await writeFile(temporaryPath, JSON.stringify(this.state), { encoding: "utf8", flag: "wx" });
+		await writeFile(temporaryPath, JSON.stringify(state), { encoding: "utf8", flag: "wx" });
 		try {
 			await rename(temporaryPath, this.metadataPath);
 		} catch (error) {
@@ -262,19 +262,27 @@ export class SessionStore {
 			if (session.activeTaskId) {
 				throw new HttpError(409, "active_task_conflict", "Stop the active task before deleting this session.");
 			}
-			await this.removePiSessionFile(session.piSessionFile);
-			const removedTasks = Object.entries(this.state.tasks).filter(([, task]) => task.sessionId === sessionId);
-			delete this.state.sessions[sessionId];
-			for (const [taskId, task] of Object.entries(this.state.tasks)) {
-				if (task.sessionId === sessionId) delete this.state.tasks[taskId];
+			const previousState = this.state;
+			const nextState = structuredClone(previousState);
+			delete nextState.sessions[sessionId];
+			for (const [taskId, task] of Object.entries(nextState.tasks)) {
+				if (task.sessionId === sessionId) delete nextState.tasks[taskId];
 			}
+			await this.persist(nextState);
 			try {
-				await this.persist();
+				await this.removePiSessionFile(session.piSessionFile);
 			} catch (error) {
-				this.state.sessions[sessionId] = session;
-				for (const [taskId, task] of removedTasks) this.state.tasks[taskId] = task;
+				try {
+					await this.persist(previousState);
+				} catch (restoreError) {
+					throw new AggregateError(
+						[error, restoreError],
+						"Session deletion failed and its metadata could not be restored.",
+					);
+				}
 				throw error;
 			}
+			this.state = nextState;
 			return true;
 		});
 	}
