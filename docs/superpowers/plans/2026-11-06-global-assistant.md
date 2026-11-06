@@ -82,4 +82,4 @@
 - User explicitly said to begin; this plan is an execution artifact, no additional approval loop.
 - Unborn empty repository has no existing code or commits to protect. Use a dedicated `codex/global-assistant` branch in the given directory rather than creating an extra checkout; record this environment adaptation in ledger.
 - Commit identity is a local automation identity if no user Git identity is configured; do not change global Git config.
-- Implement tasks sequentially with scoped reviewer gates; reviewer/read-only work may overlap independent coordinator validation. No worker spawns its own agents.
+- Task 1 finishes and passes scoped review before dependent work. With its protocol frozen, Tasks 2 and 3 can run in separate owned source directories; coordinator serializes dependency and Git mutation steps. Each module receives a scoped review before integrated validation. No worker spawns its own agents.
