@@ -1,6 +1,6 @@
 # Global Assistant Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Deliver and upload a Vue3 global assistant using real Pi SDK and configurable OpenAI-compatible models.
 
@@ -33,10 +33,10 @@
 
 **Interfaces:** Package `@pi-vue3/protocol`. Export `SessionSummary`, `SessionDetail`, `ChatMessage`, `ToolCall`, `TaskSnapshot`, `AssistantEvent`, `HealthResponse`, `TaskStatus`, `ApiError`, `CreateTaskRequest` and terminal predicate. API prefix `/api/assistant`. Task snapshot has sessionId, taskId, traceId, status, seq, messages, tools, optional error. Message has id, role user/assistant, text, status, createdAt; tools have id/name/arguments/result/status/timestamps. Session detail has messages/tools and optional activeTaskId; exact fields freeze in Task 1 and later tasks consume those definitions.
 
-- [ ] Define discriminated event types and tests for terminal status classification.
-- [ ] Verify failing test before adding predicate, implement, rerun.
-- [ ] Root scripts `dev`, `build`, `typecheck`, `test`; pnpm packages under apps/* and packages/*; scripts skip absent app scripts while scaffolding.
-- [ ] Install dependencies, run protocol tests/typecheck, report exported final interfaces and commit scoped files.
+- [x] Define discriminated event types and tests for terminal status classification.
+- [x] Verify failing test before adding predicate, implement, rerun.
+- [x] Root scripts `dev`, `build`, `typecheck`, `test`; pnpm packages under apps/* and packages/*; scripts skip absent app scripts while scaffolding.
+- [x] Install dependencies, run protocol tests/typecheck, report exported final interfaces and commit scoped files.
 
 ## Task 2: Pi service with persistent sessions and REST/SSE
 
@@ -44,13 +44,13 @@
 
 **Interfaces:** Consume shared protocol. `buildApp(options)` returns testable Fastify app; `TaskManager` consumes injectable agent runtime for deterministic lifecycle tests; actual runtime uses Pi SDK, not a separately written agent loop. App default port 3001/host 127.0.0.1.
 
-- [ ] Add tests (RED) for session CRUD/restart, duplicate submission and one-active-task conflict, fast replay, cancel races, unknown task/session, missing config, Origin/Host rejection, Skill path escape.
-- [ ] Implement local metadata with atomic replacement and Pi SessionManager persistence, interrupted-on-restart behavior; keep transcript/tool relationships usable after failure/cancel.
-- [ ] Register example tool `get_demo_items` (query and optional bounded delayMs; deterministic demo entries, abortable), and `read_skill` constrained to allowed Skill directory. Example Skill instructs use of demo tool for framework capability checks. No arbitrary file/bash/network tools. No personal resource discovery.
-- [ ] Implement model configuration from `.env`: OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY, OPENAI_CONTEXT_WINDOW, OPENAI_MAX_TOKENS, DATA_DIR, PORT. Support optional OPENAI_THINKING=disabled for MiMo through payload customization, keeping provider compatibility isolated. Configured model uses Pi `openai-completions`; verify actual installed types.
-- [ ] Endpoints under prefix: GET health; GET/POST sessions; GET/PATCH/DELETE sessions/:id; POST sessions/:id/tasks with `{text,clientRequestId,context?}`; GET tasks/:id; GET tasks/:id/events?after=N; POST tasks/:id/cancel. Runtime error bodies sanitized; keep key out of response/history/log.
-- [ ] SSE envelope matches protocol. Attach before prompt, bounded replay, seq dedupe, authoritative snapshots and resync event when cursor expired. Heartbeat and cleanup. Completed/error/cancelled/interrupted exactly once.
-- [ ] Run focused tests, build/typecheck; report API examples, Pi version and real-provider assumptions; commit only owned files.
+- [x] Add tests (RED) for session CRUD/restart, duplicate submission and one-active-task conflict, fast replay, cancel races, unknown task/session, missing config, Origin/Host rejection, Skill path escape.
+- [x] Implement local metadata with atomic replacement and Pi SessionManager persistence, interrupted-on-restart behavior; keep transcript/tool relationships usable after failure/cancel.
+- [x] Register example tool `get_demo_items` (query and optional bounded delayMs; deterministic demo entries, abortable), and `read_skill` constrained to allowed Skill directory. Example Skill instructs use of demo tool for framework capability checks. No arbitrary file/bash/network tools. No personal resource discovery.
+- [x] Implement model configuration from `.env`: OPENAI_BASE_URL, OPENAI_MODEL, OPENAI_API_KEY, OPENAI_CONTEXT_WINDOW, OPENAI_MAX_TOKENS, DATA_DIR, PORT. Support optional OPENAI_THINKING=disabled for MiMo through payload customization, keeping provider compatibility isolated. Configured model uses Pi `openai-completions`; verify actual installed types.
+- [x] Endpoints under prefix: GET health; GET/POST sessions; GET/PATCH/DELETE sessions/:id; POST sessions/:id/tasks with `{text,clientRequestId,context?}`; GET tasks/:id; GET tasks/:id/events?after=N; POST tasks/:id/cancel. Runtime error bodies sanitized; keep key out of response/history/log.
+- [x] SSE envelope matches protocol. Attach before prompt, bounded replay, seq dedupe, authoritative snapshots and resync event when cursor expired. Heartbeat and cleanup. Completed/error/cancelled/interrupted exactly once.
+- [x] Run focused tests, build/typecheck; report API examples, Pi version and real-provider assumptions; commit only owned files.
 
 ## Task 3: Vue global assistant and demo host
 
@@ -58,11 +58,11 @@
 
 **Interfaces:** Consume exact protocol and Task 2 REST routes. `AssistantProvider` or `AssistantPanel` mounts once at host root, accepts baseUrl and optional pageContext; global launcher opens drawer and expansion mode. Use fetch streaming, no secret in UI. Vite proxies API to 127.0.0.1:3001.
 
-- [ ] Write RED reducer/SSE parser tests for fragmented UTF-8/framing, duplicate seq, snapshot replacement and inactive task/session event gating.
-- [ ] Implement fetch client, session/task state, bounded reconnect with snapshot resync, abort cleanup on component unmount; task continues when closing UI. Stop uses POST cancel.
-- [ ] Implement polished Chinese demo host and assistant with session list, new/rename/delete, Markdown/code rendering sanitized, textarea, send/stop, tool argument/result summaries, visible error and config states. Host should demonstrate global access across simple demo routes/tabs. Use coherent neutral palette and responsive sizing, no fake business data claimed real.
-- [ ] Preserve local input while changing drawer mode; restore history; clientRequestId stable per submission and new on intentional retry; disable send when current session active.
-- [ ] Run tests/typecheck/build, report integration assumptions, commit scoped files.
+- [x] Write RED reducer/SSE parser tests for fragmented UTF-8/framing, duplicate seq, snapshot replacement and inactive task/session event gating.
+- [x] Implement fetch client, session/task state, bounded reconnect with snapshot resync, abort cleanup on component unmount; task continues when closing UI. Stop uses POST cancel.
+- [x] Implement polished Chinese demo host and assistant with session list, new/rename/delete, Markdown/code rendering sanitized, textarea, send/stop, tool argument/result summaries, visible error and config states. Host should demonstrate global access across simple demo routes/tabs. Use coherent neutral palette and responsive sizing, no fake business data claimed real.
+- [x] Preserve local input while changing drawer mode; restore history; clientRequestId stable per submission and new on intentional retry; disable send when current session active.
+- [x] Run tests/typecheck/build, report integration assumptions, commit scoped files.
 
 ## Task 4: Integration, real MiMo validation and delivery
 
@@ -70,11 +70,11 @@
 
 **Interfaces:** root pnpm dev/build/test/typecheck commands; built server serves web dist for same-origin local deployment. Service and front independently buildable and reusable.
 
-- [ ] Run root tests/typecheck/build. Browser test covers launcher, create session, send/stream, tool UI, stop, refresh/history, switch sessions, drawer expansion; deterministic endpoint covers error/cancel/races.
-- [ ] Configure ignored local MiMo key and run real Pi SDK smoke against specified model: multi-turn text, tool call and continuation, Skill read, cancellation and recovery. Log sanitized outcomes only.
-- [ ] Visually inspect desktop and narrow viewport; fix actual layout or interaction problems.
-- [ ] Add usage/extension/start/build/deploy/test instructions, environment example and Windows/Linux notes. Include distinction between mock and real checks.
-- [ ] Fresh final code review and fix real findings; rerun affected checks.
+- [x] Run root tests/typecheck/build. Browser test covers launcher, create session, send/stream, tool UI, stop, refresh/history, switch sessions, drawer expansion; deterministic endpoint covers error/cancel/races.
+- [x] Configure ignored local MiMo key and run real Pi SDK smoke against specified model: multi-turn text, tool call and continuation, Skill read, cancellation and recovery. Log sanitized outcomes only.
+- [x] Visually inspect desktop and narrow viewport; fix actual layout or interaction problems.
+- [x] Add usage/extension/start/build/deploy/test instructions, environment example and Windows/Linux notes. Include distinction between mock and real checks.
+- [x] Fresh final code review and fix real findings; rerun affected checks.
 - [ ] Scan tracked files for credentials, commit and upload to user-authorized GitHub repo. Verify remote tree/commit. Do not print/store secret in committed report.
 
 ## Execution rulings
@@ -83,3 +83,8 @@
 - Unborn empty repository has no existing code or commits to protect. Use a dedicated `codex/global-assistant` branch in the given directory rather than creating an extra checkout; record this environment adaptation in ledger.
 - Commit identity is a local automation identity if no user Git identity is configured; do not change global Git config.
 - Task 1 finishes and passes scoped review before dependent work. With its protocol frozen, Tasks 2 and 3 can run in separate owned source directories; coordinator serializes dependency and Git mutation steps. Each module receives a scoped review before integrated validation. No worker spawns its own agents.
+
+
+## Publication scope update
+
+The user requested a generic open-source wrapper/starter with polished README, real screenshots and MIT licensing, followed by upload to the existing GitHub repository. Product-specific integration remains an optional extension; no further business modules are required for this delivery.

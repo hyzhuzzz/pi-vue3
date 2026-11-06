@@ -17,5 +17,11 @@
     "@playwright/test": "^1.65.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "description": "A Vue 3 global assistant starter powered by Pi SDK and OpenAI-compatible models",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyzhuzzz/pi-vue3.git"
   }
 }
