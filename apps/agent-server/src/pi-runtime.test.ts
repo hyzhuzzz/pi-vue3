@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -13,10 +14,18 @@ import type { AgentRuntimeCallbacks } from "./runtime-types.js";
 const roots: string[] = [];
 const servers: Server[] = [];
 
-async function fixtureServer(): Promise<{ url: string; requests: () => number }> {
+async function fixtureServer(): Promise<{
+	url: string;
+	requests: () => number;
+	observeSessionFile: (observer: () => string | undefined) => void;
+	sessionFileAtRequest: () => string | undefined;
+}> {
 	let count = 0;
+	let sessionFileAtRequest: string | undefined;
+	let sessionFileObserver: () => string | undefined = () => undefined;
 	const server = createServer((_request, response) => {
 		count += 1;
+		sessionFileAtRequest ??= sessionFileObserver();
 		response.writeHead(401, { "content-type": "application/json" });
 		response.end(JSON.stringify({ error: { message: "invalid api key" } }));
 	});
@@ -26,7 +35,12 @@ async function fixtureServer(): Promise<{ url: string; requests: () => number }>
 		server.listen(0, "127.0.0.1", resolve);
 	});
 	const address = server.address() as AddressInfo;
-	return { url: `http://127.0.0.1:${address.port}/v1`, requests: () => count };
+	return {
+		url: `http://127.0.0.1:${address.port}/v1`,
+		requests: () => count,
+		observeSessionFile: (observer) => { sessionFileObserver = observer; },
+		sessionFileAtRequest: () => sessionFileAtRequest,
+	};
 }
 
 async function createFixture() {
@@ -65,6 +79,7 @@ describe("PiAgentRuntime", () => {
 	it("marks an SDK provider error as failed without exposing the configured key", async () => {
 		const { config, endpoint, skillRoot, store } = await createFixture();
 		const session = await store.createSession();
+		endpoint.observeSessionFile(() => store.getPiSessionFile(session.sessionId));
 		const manager = new TaskManager(store, new PiAgentRuntime(config, store, skillRoot));
 		const task = await manager.submit(session.sessionId, { text: "Reply with one word." });
 		await manager.waitForTask(task.taskId);
@@ -74,11 +89,26 @@ describe("PiAgentRuntime", () => {
 		expect(snapshot.status).toBe("failed");
 		expect(snapshot.error?.code).toBe("assistant_runtime_error");
 		expect(snapshot.messages.find((message) => message.role === "assistant")?.status).toBe("failed");
+		expect(endpoint.sessionFileAtRequest()).toBeTruthy();
 		expect(JSON.stringify(snapshot)).not.toContain("secret-fixture-api-key");
 		const piSessionFile = store.getPiSessionFile(session.sessionId);
 		expect(piSessionFile).toBeTruthy();
 		const history = await readFile(piSessionFile!, "utf8");
 		expect(history).not.toContain("secret-fixture-api-key");
+	});
+
+	it("opens an app-assigned session path before its JSONL file has been created", async () => {
+		const { config, endpoint, skillRoot, store } = await createFixture();
+		const session = await store.createSession();
+		const reservedFile = join(store.sessionDir, "reserved-first-turn.jsonl");
+		await store.setPiSessionFile(session.sessionId, reservedFile);
+		expect(existsSync(reservedFile)).toBe(false);
+		const manager = new TaskManager(store, new PiAgentRuntime(config, store, skillRoot));
+		const task = await manager.submit(session.sessionId, { text: "Reply with one word." });
+		await manager.waitForTask(task.taskId);
+
+		expect(endpoint.requests()).toBeGreaterThan(0);
+		await expect(stat(reservedFile)).resolves.toBeTruthy();
 	});
 
 	it("does not prompt the model when the task signal was already aborted during setup", async () => {

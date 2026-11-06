@@ -342,7 +342,10 @@ export class TaskManager {
 		let emitted: AssistantEvent | undefined;
 		await this.store.updateTask(taskId, (task, session) => {
 			if (isTerminalTaskStatus(task.status)) return;
-			const status = task.cancelRequested && requestedStatus === "completed" ? "cancelled" : requestedStatus;
+			const status = task.cancelRequested
+				&& (requestedStatus === "completed" || requestedStatus === "failed")
+				? "cancelled"
+				: requestedStatus;
 			task.status = status;
 			if (status === "failed") {
 				task.error = error ?? { code: "assistant_runtime_error", message: "The assistant could not complete this task.", traceId: task.traceId };

@@ -14,6 +14,7 @@ import { createConfig, type AssistantConfig } from "./config.js";
 import { apiError, HttpError } from "./errors.js";
 import { PiAgentRuntime } from "./pi-runtime.js";
 import { SessionStore } from "./session-store.js";
+import { SseWriter } from "./sse-writer.js";
 import { TaskManager } from "./task-manager.js";
 import type { AgentRuntime } from "./runtime-types.js";
 
@@ -125,15 +126,6 @@ function sendError(reply: FastifyReply, error: HttpError, request: FastifyReques
 	void reply.code(error.statusCode).send(apiError(error, request.id));
 }
 
-function sendSse(reply: FastifyReply, event: AssistantStreamEvent): boolean {
-	const raw = reply.raw;
-	if (raw.destroyed || raw.writableEnded) return false;
-	if ("seq" in event) raw.write(`id: ${event.seq}\n`);
-	raw.write(`event: ${event.type}\n`);
-	raw.write(`data: ${JSON.stringify(event)}\n\n`);
-	return true;
-}
-
 function terminalEvent(event: AssistantEvent): boolean {
 	return event.type === "task.status" && isTerminalTaskStatus(event.payload.status);
 }
@@ -222,15 +214,25 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 			let unsubscribe: () => void = () => {};
 			let heartbeat: ReturnType<typeof setInterval> | undefined;
 			const raw = reply.raw;
-			const close = (endResponse: boolean) => {
-				if (closed) return;
-				closed = true;
+			let writer: SseWriter;
+			const stopProducing = () => {
 				if (heartbeat) clearInterval(heartbeat);
+				heartbeat = undefined;
 				unsubscribe();
 				request.raw.removeListener("close", onClientClose);
-				if (endResponse && !raw.writableEnded) raw.end();
 			};
-			const onClientClose = () => close(false);
+			const endStream = () => {
+				if (closed) return;
+				closed = true;
+				stopProducing();
+				writer.end();
+			};
+			const onClientClose = () => {
+				if (closed) return;
+				closed = true;
+				stopProducing();
+				writer.destroy();
+			};
 			const deliver = (event: AssistantEvent) => {
 				if (closed || event.seq <= lastSeq) return;
 				if (event.seq !== lastSeq + 1) {
@@ -245,16 +247,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 						currentSeq: current.seq,
 						occurredAt: new Date().toISOString(),
 					};
-					sendSse(reply, resync);
-					close(true);
+					writer.writeEvent(resync);
+					endStream();
 					return;
 				}
-				if (!sendSse(reply, event)) {
-					close(false);
-					return;
-				}
+				if (!writer.writeEvent(event)) return;
 				lastSeq = event.seq;
-				if (terminalEvent(event)) close(true);
+				if (terminalEvent(event)) endStream();
 			};
 
 			unsubscribe = taskManager.subscribe(request.params.id, (event) => {
@@ -269,6 +268,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 				connection: "keep-alive",
 				"x-accel-buffering": "no",
 			});
+			writer = new SseWriter(raw, () => {
+				closed = true;
+				stopProducing();
+			});
 			request.raw.on("close", onClientClose);
 
 			if (replay.resync) {
@@ -282,20 +285,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
 					currentSeq: replay.snapshot.seq,
 					occurredAt: new Date().toISOString(),
 				};
-				sendSse(reply, resync);
-				close(true);
+				writer.writeEvent(resync);
+				endStream();
 				return;
 			}
 			for (const event of replay.events) deliver(event);
 			ready = true;
 			pending.sort((a, b) => a.seq - b.seq);
 			for (const event of pending) deliver(event);
-			if (closed || isTerminalTaskStatus(replay.snapshot.status)) {
-				close(true);
+			if (closed) return;
+			if (isTerminalTaskStatus(replay.snapshot.status)) {
+				endStream();
 				return;
 			}
 			heartbeat = setInterval(() => {
-				if (!raw.destroyed && !raw.writableEnded) raw.write(": heartbeat\n\n");
+				if (!closed) writer.writeHeartbeat();
 			}, HEARTBEAT_MS);
 			heartbeat.unref?.();
 		});

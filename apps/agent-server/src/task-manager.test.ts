@@ -2,11 +2,42 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { SessionStore } from "./session-store.js";
+import { SessionStore, type StoredSession, type StoredTask } from "./session-store.js";
 import { TaskManager } from "./task-manager.js";
 import type { AgentRuntime } from "./runtime-types.js";
+import type { TaskSnapshot } from "@pi-vue3/protocol";
 
 const roots: string[] = [];
+
+class GatedSessionStore extends SessionStore {
+	private armed = false;
+	private updateCount = 0;
+	private signalPaused!: () => void;
+	private signalSecondUpdate!: () => void;
+	private releaseFirst!: () => void;
+	readonly firstUpdatePaused = new Promise<void>((resolve) => { this.signalPaused = resolve; });
+	readonly secondUpdateFinished = new Promise<void>((resolve) => { this.signalSecondUpdate = resolve; });
+	private readonly firstUpdateReleased = new Promise<void>((resolve) => { this.releaseFirst = resolve; });
+
+	arm(): void { this.armed = true; }
+	release(): void { this.releaseFirst(); }
+
+	override async updateTask(
+		taskId: string,
+		update: (task: StoredTask, session: StoredSession) => void,
+	): Promise<TaskSnapshot> {
+		if (this.armed) {
+			this.updateCount += 1;
+			if (this.updateCount === 1) {
+				this.signalPaused();
+				await this.firstUpdateReleased;
+			}
+		}
+		const snapshot = await super.updateTask(taskId, update);
+		if (this.armed && this.updateCount === 2) this.signalSecondUpdate();
+		return snapshot;
+	}
+}
 
 async function setup(runtime: AgentRuntime) {
 	const root = await mkdtemp(join(tmpdir(), "pi-agent-task-"));
@@ -93,6 +124,27 @@ describe("TaskManager", () => {
 		expect(repeated.status).toBe("cancelled");
 		expect(replay.events.filter((event) => event.type === "task.status" && event.payload.status === "cancelled")).toHaveLength(1);
 		expect(cancelled.messages.find((message) => message.text === "Partial")?.status).toBe("cancelled");
+	});
+
+	it("lets cancellation accepted before terminal persistence win a concurrent runtime failure", async () => {
+		const root = await mkdtemp(join(tmpdir(), "pi-agent-cancel-failure-"));
+		roots.push(root);
+		const store = new GatedSessionStore({ dataDir: join(root, "data") });
+		await store.init();
+		const session = await store.createSession();
+		store.arm();
+		const manager = new TaskManager(store, { run: async () => { throw new Error("provider failed"); } });
+		const task = await manager.submit(session.sessionId, { text: "Cause a provider failure" });
+		await store.firstUpdatePaused;
+		const cancellation = manager.cancel(task.taskId);
+		await store.secondUpdateFinished;
+		store.release();
+		const cancelled = await cancellation;
+		const replay = await manager.replay(task.taskId, 0);
+
+		expect(cancelled.status).toBe("cancelled");
+		expect(replay.events.filter((event) => event.type === "task.status" && ["completed", "failed", "cancelled", "interrupted"].includes(event.payload.status))).toHaveLength(1);
+		expect(replay.events.at(-1)).toMatchObject({ type: "task.status", payload: { status: "cancelled" } });
 	});
 
 	it("records an in-flight tool as cancelled when its abort result arrives", async () => {

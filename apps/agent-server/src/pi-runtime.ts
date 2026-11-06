@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, join } from "node:path";
 import {
 	createAgentSession,
@@ -101,6 +101,12 @@ export class PiAgentRuntime implements AgentRuntime {
 			customTools: tools,
 			tools: ["get_demo_items", "read_skill"],
 		});
+		try {
+			if (session.sessionFile) await input.callbacks.onSessionFile(session.sessionFile);
+		} catch (error) {
+			session.dispose();
+			throw error;
+		}
 
 		let eventTail = Promise.resolve();
 		let callbackFailure: unknown;
@@ -207,9 +213,10 @@ export class PiAgentRuntime implements AgentRuntime {
 		if (!sessionFile) return SessionManager.create(workDir, sessionDir);
 		const resolvedFile = resolve(sessionFile);
 		const resolvedDirectory = resolve(sessionDir);
-		if (!isWithin(resolvedDirectory, resolvedFile) || !existsSync(resolvedFile)) {
-			throw new Error("Stored Pi session is unavailable");
+		if (!isWithin(resolvedDirectory, resolvedFile)) {
+			throw new Error("Stored Pi session path escaped the app-owned session directory");
 		}
+		// Pi 1.5.0 initializes a new persisted session at an assigned, not-yet-created path.
 		return SessionManager.open(resolvedFile, sessionDir, workDir);
 	}
 }
