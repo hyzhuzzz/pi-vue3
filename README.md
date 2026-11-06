@@ -17,6 +17,8 @@ Copy-Item .env.example .env
 pnpm dev
 ```
 
+开发页面默认位于 `http://127.0.0.1:5173`，助手服务位于 `http://127.0.0.1:3001`；前端开发服务器代理助手 API。
+
 Linux/macOS 使用 `cp .env.example .env`。模型密钥由服务端读取，不能放进 `VITE_*` 变量或前端代码。
 
 MiMo 的 OpenAI 兼容配置示例（密钥自行填写）：
@@ -50,6 +52,14 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+浏览器交互测试使用可控测试接口：
+
+```sh
+pnpm test:e2e
+```
+
+Windows 默认使用已安装的 Edge。其他系统先运行 `pnpm exec playwright install chromium`。
 
 根脚本先构建共享协议，再处理应用。生产运行方式、数据目录和嵌入边界见 [部署说明](docs/deployment.md)。
 
