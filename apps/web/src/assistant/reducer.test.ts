@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AssistantEvent, TaskSnapshot } from '@pi-vue3/protocol';
-import { applyTaskSnapshot, reduceAssistantEvent } from './reducer';
+import type { AssistantEvent, SessionDetail, TaskSnapshot } from '@pi-vue3/protocol';
+import { applyTaskSnapshot, mergeTaskSnapshotIntoSession, reduceAssistantEvent } from './reducer';
 
 const initial: TaskSnapshot = {
   sessionId: 'session-a', taskId: 'task-a', traceId: 'trace-a', status: 'running', seq: 3,
@@ -44,5 +44,34 @@ describe('assistant event reducer', () => {
     expect(wrongTask.accepted).toBe(false);
     expect(wrongSession.snapshot).toBe(initial);
     expect(wrongTask.snapshot).toBe(initial);
+  });
+
+  it('merges a task snapshot into full session history without dropping earlier turns', () => {
+    const history: SessionDetail = {
+      sessionId: 'session-a', title: '完整会话', createdAt: '2026-11-06T00:00:00Z', updatedAt: '2026-11-06T00:01:00Z',
+      messageCount: 4, activeTaskId: 'task-a',
+      messages: [
+        { id: 'previous-user', taskId: 'task-before', role: 'user', text: '之前的问题', status: 'completed', createdAt: '2026-11-06T00:00:00Z' },
+        { id: 'previous-answer', taskId: 'task-before', role: 'assistant', text: '之前的回答', status: 'completed', createdAt: '2026-11-06T00:00:01Z' },
+        { id: 'user-now', taskId: 'task-a', role: 'user', text: '当前问题', status: 'completed', createdAt: '2026-11-06T00:01:00Z' },
+        { id: 'answer-now', taskId: 'task-a', role: 'assistant', text: '部分内容', status: 'streaming', createdAt: '2026-11-06T00:01:01Z' },
+      ],
+      tools: [{ id: 'previous-tool', taskId: 'task-before', name: 'get_demo_items', arguments: {}, result: [], status: 'completed', createdAt: '2026-11-06T00:00:01Z' }],
+    };
+    const authoritative: TaskSnapshot = {
+      ...initial, seq: 9, status: 'completed',
+      messages: [
+        history.messages[2]!,
+        { ...history.messages[3]!, text: '完整回答', status: 'completed' },
+      ],
+      tools: [{ id: 'current-tool', taskId: 'task-a', name: 'get_demo_items', arguments: { query: 'current' }, result: [], status: 'completed', createdAt: '2026-11-06T00:01:01Z' }],
+    };
+
+    const merged = mergeTaskSnapshotIntoSession(history, authoritative);
+
+    expect(merged.messages.map((message) => message.id)).toEqual(['previous-user', 'previous-answer', 'user-now', 'answer-now']);
+    expect(merged.messages.find((message) => message.id === 'answer-now')?.text).toBe('完整回答');
+    expect(merged.tools.map((tool) => tool.id)).toEqual(['previous-tool', 'current-tool']);
+    expect(merged.activeTaskId).toBeUndefined();
   });
 });

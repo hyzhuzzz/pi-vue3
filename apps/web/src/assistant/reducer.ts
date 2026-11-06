@@ -3,7 +3,9 @@ import type {
   ChatMessage,
   TaskSnapshot,
   ToolCall,
+  SessionDetail,
 } from '@pi-vue3/protocol';
+import { isTerminalTaskStatus } from '@pi-vue3/protocol';
 
 export interface EventTarget {
   sessionId: string;
@@ -82,4 +84,28 @@ export function applyTaskSnapshot(current: TaskSnapshot | null, authoritative: T
     messages: [...authoritative.messages],
     tools: [...authoritative.tools],
   };
+}
+
+/** Replace only this task's contribution while retaining the session's earlier turns. */
+export function mergeTaskSnapshotIntoSession(history: SessionDetail, snapshot: TaskSnapshot): SessionDetail {
+  if (history.sessionId !== snapshot.sessionId) return history;
+
+  const taskMessageIds = new Set(snapshot.messages.map((message) => message.id));
+  const taskToolIds = new Set(snapshot.tools.map((tool) => tool.id));
+  const retainedMessages = history.messages.filter((message) => message.taskId !== snapshot.taskId
+    && !taskMessageIds.has(message.id));
+  const retainedTools = history.tools.filter((tool) => tool.taskId !== snapshot.taskId
+    && !taskToolIds.has(tool.id));
+  const messages = [...retainedMessages, ...snapshot.messages]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const tools = [...retainedTools, ...snapshot.tools]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const next: SessionDetail = { ...history, messages, tools };
+
+  if (isTerminalTaskStatus(snapshot.status)) {
+    if (next.activeTaskId === snapshot.taskId) delete next.activeTaskId;
+  } else {
+    next.activeTaskId = snapshot.taskId;
+  }
+  return next;
 }

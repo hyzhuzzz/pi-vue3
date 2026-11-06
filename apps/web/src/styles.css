@@ -202,7 +202,7 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
 .message-meta strong { color: #394960; font-size: 10px; }
 .message-meta > span { color: #a0aab7; font-size: 8px; }
 .message-meta .message-status { color: #178982; }
-.markdown-content { color: #435269; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; }
+.markdown-content { color: #435269; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
 .markdown-content p { margin: 4px 0 8px; }
 .markdown-content p:last-child { margin-bottom: 2px; }
 .plain-user-content { color: #4b5a70; }
@@ -224,18 +224,18 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
 .tool-card summary::-webkit-details-marker { display: none; }
 .tool-symbol { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 auto; color: #4881a2; border-radius: 8px; background: #ecf4f7; font-size: 13px; }
 .tool-summary-copy { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-.tool-human-label { color: #536278; font-size: 9px; font-weight: 600; }
-.tool-summary-copy code { color: #94a0ad; font-size: 8px; }
-.tool-status-pill { flex: 0 0 auto; margin-left: auto; padding: 4px 6px; color: #658175; border-radius: 5px; background: #edf6f0; font-size: 8px; }
+.tool-human-label { color: #536278; font-size: 11px; font-weight: 600; }
+.tool-summary-copy code { color: #94a0ad; font-size: 11px; }
+.tool-status-pill { flex: 0 0 auto; margin-left: auto; padding: 4px 6px; color: #658175; border-radius: 5px; background: #edf6f0; font-size: 11px; }
 .tool-failed .tool-status-pill { color: #a44d55; background: #fdf0f0; }
 .tool-running .tool-status-pill, .tool-pending .tool-status-pill { color: #94783f; background: #faf5e9; }
 .tool-chevron { color: #95a0ad; font-size: 13px; transition: transform .15s; }
 .tool-card[open] .tool-chevron { transform: rotate(180deg); }
 .tool-details { padding: 0 10px 10px 47px; }
 .tool-detail-block { margin-top: 9px; }
-.tool-detail-block > span { display: block; margin-bottom: 5px; color: #8c98a7; font-size: 8px; }
-.tool-detail-block pre { max-height: 170px; overflow: auto; margin: 0; padding: 8px 9px; color: #557081; border-radius: 6px; background: #f0f4f6; font-size: 8px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tool-pending-note { margin-top: 9px; color: #99a4b1; font-size: 8px; }
+.tool-detail-block > span { display: block; margin-bottom: 5px; color: #8c98a7; font-size: 10px; }
+.tool-detail-block pre { max-height: 170px; overflow: auto; margin: 0; padding: 8px 9px; color: #557081; border-radius: 6px; background: #f0f4f6; font-size: 10px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-pending-note { margin-top: 9px; color: #99a4b1; font-size: 10px; }
 .thinking-line { display: flex; align-items: center; gap: 8px; color: #8895a4; font-size: 9px; }
 .thinking-avatar { display: grid; place-items: center; width: 24px; height: 24px; color: #fff; border-radius: 8px; background: #208d89; font-size: 11px; }
 .thinking-dots { display: inline-flex; align-items: center; gap: 3px; }
@@ -316,6 +316,7 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
   .header-connection { display: none; }
   .assistant-header-actions { gap: 0; }
   .assistant-header-actions .icon-button { width: 32px; }
+  .header-new-session { color: #168b86; }
   .mobile-session-switcher { display: flex; align-items: center; gap: 7px; padding: 8px 13px; border-bottom: 1px solid #eef1f4; background: #fbfcfd; }
   .mobile-session-switcher select { min-width: 0; flex: 1; height: 32px; padding: 0 8px; border: 1px solid #e3e8ed; border-radius: 7px; color: #526177; background: white; font-size: 10px; }
   .mobile-session-switcher .icon-button { width: 32px; height: 32px; color: #168b86; background: #eaf6f4; }
@@ -328,6 +329,9 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
   .conversation-welcome h3 { font-size: 17px; }
   .conversation-welcome > p { max-width: 300px; }
   .suggestion-list { margin-top: 17px; }
+  .markdown-content { font-size: 14px; }
+  .tool-summary-copy code { font-size: 11px; }
+  .tool-status-pill { font-size: 11px; }
   .composer-area { padding: 9px 11px 10px; }
   .composer-box textarea { min-height: 52px; font-size: 12px; }
   .composer-disclaimer { margin-top: 6px; }

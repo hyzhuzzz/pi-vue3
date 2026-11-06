@@ -11,7 +11,8 @@ import {
   type TaskSnapshot,
 } from '@pi-vue3/protocol';
 import { AssistantApi } from './api';
-import { applyTaskSnapshot, reduceAssistantEvent } from './reducer';
+import { applyTaskSnapshot, mergeTaskSnapshotIntoSession, reduceAssistantEvent } from './reducer';
+import { resolveInitialSessionLoad } from './session-state';
 
 const SESSION_STORAGE_KEY = 'pi-vue3.assistant.session';
 const MAX_RECONNECTS = 3;
@@ -46,11 +47,16 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   const retryText = ref('');
   const error = ref<string | null>(null);
   let selectionVersion = 0;
+  let sessionInteractionVersion = 0;
   let taskController: AbortController | null = null;
   let disposed = false;
 
   const taskIsActive = computed(() => currentTask.value !== null
     && !isTerminalTaskStatus(currentTask.value.status));
+
+  function recordSessionInteraction(): void {
+    sessionInteractionVersion += 1;
+  }
 
   function saveSelection(sessionId: string | null): void {
     try {
@@ -78,14 +84,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
     currentTask.value = snapshot;
     const detail = currentSession.value;
     if (!detail || detail.sessionId !== snapshot.sessionId) return;
-    const next: SessionDetail = {
-      ...detail,
-      messages: snapshot.messages,
-      tools: snapshot.tools,
-    };
-    if (isTerminalTaskStatus(snapshot.status)) delete next.activeTaskId;
-    else next.activeTaskId = snapshot.taskId;
-    currentSession.value = next;
+    currentSession.value = mergeTaskSnapshotIntoSession(detail, snapshot);
   }
 
   async function refreshCurrentHistory(sessionId: string, taskId: string): Promise<void> {
@@ -183,6 +182,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   }
 
   async function selectSession(sessionId: string): Promise<void> {
+    recordSessionInteraction();
     taskController?.abort();
     taskController = null;
     const version = ++selectionVersion;
@@ -201,7 +201,8 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
         const snapshot = await api.getTask(detail.activeTaskId);
         if (disposed || version !== selectionVersion) return;
         publishSnapshot(snapshot);
-        if (!isTerminalTaskStatus(snapshot.status)) startTaskSubscription(snapshot);
+        if (isTerminalTaskStatus(snapshot.status)) void refreshCurrentHistory(sessionId, snapshot.taskId);
+        else startTaskSubscription(snapshot);
       }
     } catch (loadError) {
       if (!disposed && version === selectionVersion) error.value = messageFromError(loadError);
@@ -211,38 +212,49 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   }
 
   async function initialize(): Promise<void> {
+    const startedAtVersion = sessionInteractionVersion;
     initializing.value = true;
     try {
       const [healthResult, sessionList] = await Promise.all([api.health(), api.listSessions()]);
       health.value = healthResult;
-      sessions.value = sessionList;
       let persistedSelection: string | null = null;
       try {
         persistedSelection = window.localStorage.getItem(SESSION_STORAGE_KEY);
       } catch {
         persistedSelection = null;
       }
-      const selected = sessionList.find((item) => item.sessionId === persistedSelection)
-        ?? sessionList[0];
-      if (selected) await selectSession(selected.sessionId);
+      const resolution = resolveInitialSessionLoad({
+        startedAtVersion,
+        currentVersion: sessionInteractionVersion,
+        currentSessions: sessions.value,
+        currentSelectedSessionId: selectedSessionId.value,
+        loadedSessions: sessionList,
+        persistedSessionId: persistedSelection,
+      });
+      if (!resolution.applied) return;
+      sessions.value = resolution.sessions;
+      if (resolution.sessionToLoad) await selectSession(resolution.sessionToLoad);
       else {
-        selectedSessionId.value = null;
+        selectedSessionId.value = resolution.selectedSessionId;
         currentSession.value = null;
         currentTask.value = null;
         saveSelection(null);
       }
     } catch (loadError) {
-      error.value = messageFromError(loadError);
+      if (startedAtVersion === sessionInteractionVersion) error.value = messageFromError(loadError);
     } finally {
       initializing.value = false;
     }
   }
 
   async function createSession(): Promise<SessionDetail> {
+    recordSessionInteraction();
+    const version = ++selectionVersion;
     taskController?.abort();
     taskController = null;
     const detail = await api.createSession();
     const list = await api.listSessions();
+    if (disposed || version !== selectionVersion) return detail;
     sessions.value = list;
     selectedSessionId.value = detail.sessionId;
     currentSession.value = detail;
@@ -254,14 +266,18 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   }
 
   async function renameSession(sessionId: string, title: string): Promise<void> {
+    recordSessionInteraction();
     const detail = await api.renameSession(sessionId, title.trim());
     updateSessionSummary(detail);
     if (selectedSessionId.value === sessionId) currentSession.value = detail;
   }
 
   async function deleteSession(sessionId: string): Promise<void> {
+    recordSessionInteraction();
+    const version = ++selectionVersion;
     await api.deleteSession(sessionId);
     const list = await api.listSessions();
+    if (disposed || version !== selectionVersion) return;
     sessions.value = list;
     if (selectedSessionId.value === sessionId) {
       taskController?.abort();
@@ -278,6 +294,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   async function send(text = draft.value): Promise<void> {
     const normalizedText = text.trim();
     if (!normalizedText || submitting.value || taskIsActive.value) return;
+    recordSessionInteraction();
     submitting.value = true;
     error.value = null;
     retryText.value = '';

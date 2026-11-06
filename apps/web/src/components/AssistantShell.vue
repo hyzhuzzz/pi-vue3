@@ -38,7 +38,9 @@ const timeline = computed<TimelineItem[]>(() => {
   const session = assistant.currentSession.value;
   if (!session) return [];
   return [
-    ...session.messages.map((message): TimelineItem => ({ kind: 'message', id: message.id, createdAt: message.createdAt, message })),
+    ...session.messages
+      .filter((message) => !(message.role === 'assistant' && message.status === 'completed' && message.text.trim().length === 0))
+      .map((message): TimelineItem => ({ kind: 'message', id: message.id, createdAt: message.createdAt, message })),
     ...session.tools.map((tool): TimelineItem => ({ kind: 'tool', id: tool.id, createdAt: tool.createdAt, tool })),
   ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 });
@@ -244,6 +246,7 @@ onMounted(() => {
             </div>
             <div class="assistant-header-actions">
               <span class="header-connection" :title="connectionLabel"><i :class="{ ready: assistant.health.value?.configured }"></i>{{ connectionLabel }}</span>
+              <button class="icon-button header-new-session" aria-label="创建新会话" title="创建新会话" @click="addSession"><Plus /></button>
               <button class="icon-button header-expand" :aria-label="expanded ? '还原助手' : '展开助手'" :title="expanded ? '还原助手' : '展开助手'" @click="expanded = !expanded">
                 <ScaleToOriginal v-if="expanded" />
                 <FullScreen v-else />
@@ -261,6 +264,20 @@ onMounted(() => {
               <option value="" disabled>选择一个会话</option>
               <option v-for="session in assistant.sessions.value" :key="session.sessionId" :value="session.sessionId">{{ session.title }}</option>
             </select>
+            <button
+              v-if="assistant.currentSession.value"
+              class="icon-button"
+              :aria-label="`重命名会话 ${assistant.currentSession.value.title}`"
+              title="重命名当前会话"
+              @click="renameSession(assistant.currentSession.value)"
+            ><EditPen /></button>
+            <button
+              v-if="assistant.currentSession.value"
+              class="icon-button danger-hover"
+              :aria-label="`删除会话 ${assistant.currentSession.value.title}`"
+              title="删除当前会话"
+              @click="removeSession(assistant.currentSession.value)"
+            ><Delete /></button>
             <button class="icon-button" aria-label="创建新会话" @click="addSession"><Plus /></button>
           </div>
 
