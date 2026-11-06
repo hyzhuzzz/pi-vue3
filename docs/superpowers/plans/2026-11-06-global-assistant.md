@@ -17,7 +17,7 @@
 - OpenAI Chat Completions; test model `mimo-v2.6-flash`, base URL `https://api.xiaomimimo.com/v1`.
 - Single local trusted user, loopback default; no usage-management module or production multiuser claim.
 - Same-session one active task; one terminal event; disconnect does not cancel; history persists.
-- All concrete execution agents use `gpt-6-luna`, reasoning `max`, per user preference; coordinator guides and verifies.
+- All subagents use `gpt-6-luna`, reasoning `max`, including research, implementation, tests and all reviews. Astra and other subagent models are prohibited by the user; no review exception. Coordinator guides and verifies.
 
 ## Review Focus
 
