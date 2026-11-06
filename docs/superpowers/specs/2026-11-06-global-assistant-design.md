@@ -1,7 +1,7 @@
 # Pi + Vue3 全局助手基础版设计
 
 日期：2026-11-06（Asia/Shanghai）  
-状态：待用户审阅；本文是设计，尚未开始产品代码实现。
+状态：用户于 2026-11-06 确认并授权实施；实施计划见相邻 plans 目录。
 
 ## 1. 目标与背景
 
@@ -144,3 +144,5 @@ HTTP 框架、Markdown 库、日志格式、内部文件拆分、合理缓冲/�
 ## 12. 设计检查记录
 
 已由独立 `gpt-6-luna` / `max` 子代理进行可实施性检查。唯一范围疑问是示例 Skill 是否推迟；依照上一轮基础范围提议，已明确基础版保留最小加载验证，真实业务 Skills 后续加入。SDK 核验与参考项目核验分别由两位同配置子代理执行，主代理核对了官方 SDK 文档及包定义；尚未安装 SDK 或验证真实模型。
+
+用户随后提供 MiMo 测试配置并授权开始。已核对 [MiMo 首次调用文档](https://mimo.mi.com/docs/zh-CN/quick-start/summary/first-api-call) 和 [模型列表](https://mimo.mi.com/docs/zh-CN/quick-start/summary/model)：使用 `https://api.xiaomimimo.com/v1` 与 `mimo-v2.6-flash`。本地初始探测已通过普通对话、流式文本和 function tool calling；这不替代后续真实 Pi 端到端验收。测试凭据仅在被 Git 忽略的本地配置中。
