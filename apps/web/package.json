@@ -1,0 +1,26 @@
+{
+  "name": "@pi-vue3/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc -p tsconfig.json && vite build",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@pi-vue3/protocol": "workspace:*",
+    "dompurify": "^3.3.0",
+    "element-plus": "^2.11.8",
+    "markdown-it": "^14.1.0",
+    "vue": "^3.5.26"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "vite": "^7.2.2",
+    "vue-tsc": "^3.1.3"
+  }
+}
