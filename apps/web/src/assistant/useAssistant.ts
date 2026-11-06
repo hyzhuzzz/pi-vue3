@@ -12,7 +12,12 @@ import {
 } from '@pi-vue3/protocol';
 import { AssistantApi } from './api';
 import { applyTaskSnapshot, mergeTaskSnapshotIntoSession, reduceAssistantEvent } from './reducer';
-import { resolveInitialSessionLoad } from './session-state';
+import {
+  isSubmissionTargetCurrent,
+  mergeSessionSummaries,
+  resolveInitialSessionLoad,
+  shouldPublishAcceptedSubmission,
+} from './session-state';
 
 const SESSION_STORAGE_KEY = 'pi-vue3.assistant.session';
 const MAX_RECONNECTS = 3;
@@ -48,6 +53,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   const error = ref<string | null>(null);
   let selectionVersion = 0;
   let sessionInteractionVersion = 0;
+  const deletedSessionIds = new Set<string>();
   let taskController: AbortController | null = null;
   let disposed = false;
 
@@ -68,6 +74,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
   }
 
   function updateSessionSummary(detail: SessionDetail): void {
+    if (deletedSessionIds.has(detail.sessionId)) return;
     const summary: SessionSummary = {
       sessionId: detail.sessionId,
       title: detail.title,
@@ -78,6 +85,20 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
     const index = sessions.value.findIndex((item) => item.sessionId === detail.sessionId);
     if (index < 0) sessions.value = [summary, ...sessions.value];
     else sessions.value = sessions.value.map((item) => item.sessionId === detail.sessionId ? summary : item);
+  }
+
+  async function refreshSessionInBackground(sessionId: string): Promise<void> {
+    try {
+      const [detail, list] = await Promise.all([api.getSession(sessionId), api.listSessions()]);
+      if (disposed || deletedSessionIds.has(sessionId)) return;
+      sessions.value = mergeSessionSummaries(
+        list.filter((item) => !deletedSessionIds.has(item.sessionId)),
+        sessions.value.filter((item) => !deletedSessionIds.has(item.sessionId)),
+      );
+      updateSessionSummary(detail);
+    } catch {
+      // The session stays in the current list; it can be refreshed when opened again.
+    }
   }
 
   function publishSnapshot(snapshot: TaskSnapshot): void {
@@ -92,7 +113,10 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
       const [detail, list] = await Promise.all([api.getSession(sessionId), api.listSessions()]);
       if (disposed || selectedSessionId.value !== sessionId || currentTask.value?.taskId !== taskId) return;
       currentSession.value = detail;
-      sessions.value = list;
+      sessions.value = mergeSessionSummaries(
+        list.filter((item) => !deletedSessionIds.has(item.sessionId)),
+        sessions.value.filter((item) => !deletedSessionIds.has(item.sessionId)),
+      );
     } catch {
       // The streamed result remains visible; history will be reconciled on the next session load.
     }
@@ -228,10 +252,13 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
         currentVersion: sessionInteractionVersion,
         currentSessions: sessions.value,
         currentSelectedSessionId: selectedSessionId.value,
-        loadedSessions: sessionList,
+        loadedSessions: sessionList.filter((item) => !deletedSessionIds.has(item.sessionId)),
         persistedSessionId: persistedSelection,
       });
-      if (!resolution.applied) return;
+      if (!resolution.applied) {
+        sessions.value = resolution.sessions;
+        return;
+      }
       sessions.value = resolution.sessions;
       if (resolution.sessionToLoad) await selectSession(resolution.sessionToLoad);
       else {
@@ -254,13 +281,17 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
     taskController = null;
     const detail = await api.createSession();
     const list = await api.listSessions();
-    if (disposed || version !== selectionVersion) return detail;
-    sessions.value = list;
+    if (disposed) return detail;
+    sessions.value = mergeSessionSummaries(
+      list.filter((item) => !deletedSessionIds.has(item.sessionId)),
+      sessions.value.filter((item) => !deletedSessionIds.has(item.sessionId)),
+    );
+    updateSessionSummary(detail);
+    if (version !== selectionVersion) return detail;
     selectedSessionId.value = detail.sessionId;
     currentSession.value = detail;
     currentTask.value = null;
     saveSelection(detail.sessionId);
-    updateSessionSummary(detail);
     error.value = null;
     return detail;
   }
@@ -276,9 +307,15 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
     recordSessionInteraction();
     const version = ++selectionVersion;
     await api.deleteSession(sessionId);
+    deletedSessionIds.add(sessionId);
     const list = await api.listSessions();
-    if (disposed || version !== selectionVersion) return;
-    sessions.value = list;
+    if (disposed) return;
+    const available = list.filter((item) => !deletedSessionIds.has(item.sessionId));
+    sessions.value = mergeSessionSummaries(
+      available,
+      sessions.value.filter((item) => !deletedSessionIds.has(item.sessionId)),
+    );
+    if (version !== selectionVersion) return;
     if (selectedSessionId.value === sessionId) {
       taskController?.abort();
       taskController = null;
@@ -286,7 +323,7 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
       currentSession.value = null;
       selectedSessionId.value = null;
       saveSelection(null);
-      const next = list[0];
+      const next = available[0];
       if (next) await selectSession(next.sessionId);
     }
   }
@@ -298,25 +335,70 @@ export function useAssistant(baseUrl: string, getPageContext: () => JsonObject |
     submitting.value = true;
     error.value = null;
     retryText.value = '';
+    let targetSession: SessionDetail | null = currentSession.value;
+    let createdForSubmission = false;
     try {
-      let detail = currentSession.value;
-      if (!detail) detail = await createSession();
+      if (!targetSession && selectedSessionId.value !== null) return;
+      if (!targetSession) {
+        createdForSubmission = true;
+        targetSession = await createSession();
+      }
+      const target = { sessionId: targetSession.sessionId, selectionVersion };
+      if (!isSubmissionTargetCurrent(
+        target,
+        selectedSessionId.value,
+        currentSession.value?.sessionId ?? null,
+        selectionVersion,
+      )) return;
+
       const request: CreateTaskRequest = {
         text: normalizedText,
         clientRequestId: newRequestId(),
       };
       const context = getPageContext();
       if (context) Reflect.set(request, 'context', context);
-      const snapshot = await api.createTask(detail.sessionId, request);
+      const snapshot = await api.createTask(target.sessionId, request);
+      if (!shouldPublishAcceptedSubmission(
+        target.sessionId,
+        selectedSessionId.value,
+        currentSession.value?.sessionId ?? null,
+      )) {
+        void refreshSessionInBackground(target.sessionId);
+        return;
+      }
       draft.value = '';
       retryText.value = normalizedText;
       publishSnapshot(snapshot);
       startTaskSubscription(snapshot);
     } catch (sendError) {
+      if (targetSession && !shouldPublishAcceptedSubmission(
+        targetSession.sessionId,
+        selectedSessionId.value,
+        currentSession.value?.sessionId ?? null,
+      )) {
+        void refreshSessionInBackground(targetSession.sessionId);
+        return;
+      }
       error.value = messageFromError(sendError);
       retryText.value = normalizedText;
+      if (createdForSubmission && selectedSessionId.value === null) {
+        void refreshSessionsAfterFailedCreation();
+      }
     } finally {
       submitting.value = false;
+    }
+  }
+
+  async function refreshSessionsAfterFailedCreation(): Promise<void> {
+    try {
+      const list = await api.listSessions();
+      if (disposed) return;
+      sessions.value = mergeSessionSummaries(
+        list.filter((item) => !deletedSessionIds.has(item.sessionId)),
+        sessions.value.filter((item) => !deletedSessionIds.has(item.sessionId)),
+      );
+    } catch {
+      // A later open or explicit refresh can recover the session list.
     }
   }
 

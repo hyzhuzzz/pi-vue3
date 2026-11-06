@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { ElIcon } from 'element-plus';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   ArrowUp,
@@ -412,7 +413,6 @@ onMounted(() => {
                 </button>
               </div>
             </div>
-            <p class="composer-disclaimer">AI 生成的内容可能需要核对。请勿输入敏感信息。</p>
           </footer>
         </div>
       </section>

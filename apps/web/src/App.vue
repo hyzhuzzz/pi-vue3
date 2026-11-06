@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { ElIcon } from 'element-plus';
 import { ArrowRight, ChatDotRound, Connection, Document, MagicStick } from '@element-plus/icons-vue';
 import AssistantShell from './components/AssistantShell.vue';
 

@@ -107,7 +107,7 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
 @keyframes expand-in { from { transform: scale(.98); opacity: .8; } to { transform: scale(1); opacity: 1; } }
 .assistant-fade-enter-active, .assistant-fade-leave-active { transition: opacity .2s; }
 .assistant-fade-enter-from, .assistant-fade-leave-to { opacity: 0; }
-.session-sidebar { display: flex; flex: 0 0 278px; flex-direction: column; padding: 20px 13px 14px; border-right: 1px solid #e9edf2; background: #f8fafb; }
+.session-sidebar { display: flex; flex: 0 0 278px; width: 278px; max-width: 278px; min-width: 0; flex-direction: column; padding: 20px 13px 14px; border-right: 1px solid #e9edf2; background: #f8fafb; overflow: hidden; }
 .sidebar-topline { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 18px; }
 .sidebar-brand { display: inline-flex; align-items: center; gap: 9px; color: #293850; font-size: 13px; font-weight: 700; }
 .sidebar-mark { display: grid; place-items: center; width: 29px; height: 29px; color: #fff; background: #168b86; border-radius: 9px; font-size: 15px; }
@@ -120,7 +120,7 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
 .session-section-title { display: flex; align-items: center; justify-content: space-between; margin: 25px 7px 9px; color: #8995a6; font-size: 10px; font-weight: 600; letter-spacing: .04em; }
 .session-section-title span:last-child { min-width: 19px; height: 19px; padding: 0 5px; display: grid; place-items: center; border-radius: 6px; color: #8190a4; background: #edf1f4; font-size: 10px; }
 .session-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
-.session-row { position: relative; display: flex; align-items: center; min-height: 56px; border-radius: 9px; transition: background .16s; }
+.session-row { position: relative; display: flex; min-width: 0; align-items: center; min-height: 56px; border-radius: 9px; transition: background .16s; }
 .session-row:hover { background: #f0f4f5; }
 .session-row.selected { background: #eaf5f3; }
 .session-select { display: flex; min-width: 0; align-items: center; gap: 9px; flex: 1; height: 56px; padding: 0 5px 0 8px; border: 0; text-align: left; background: transparent; cursor: pointer; }
@@ -259,7 +259,6 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
 .stop-button { display: inline-flex; align-items: center; gap: 6px; height: 29px; padding: 0 10px; border: 1px solid #f0dada; border-radius: 8px; color: #a74c52; background: #fff7f7; cursor: pointer; font-size: 9px; font-weight: 600; }
 .stop-button:hover { background: #ffeded; }
 .stop-square { width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
-.composer-disclaimer { margin: 7px 2px 0; color: #a6afba; text-align: center; font-size: 8px; }
 
 @media (max-width: 760px) {
   .host-header { height: 64px; padding: 0 18px; }
@@ -334,7 +333,6 @@ button:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visi
   .tool-status-pill { font-size: 11px; }
   .composer-area { padding: 9px 11px 10px; }
   .composer-box textarea { min-height: 52px; font-size: 12px; }
-  .composer-disclaimer { margin-top: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
