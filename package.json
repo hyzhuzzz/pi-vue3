@@ -9,9 +9,12 @@
     "dev": "pnpm --recursive --filter \"./packages/*\" run --if-present build && pnpm --recursive --filter \"./apps/*\" --parallel run --if-present dev",
     "build": "pnpm --recursive --filter \"./packages/*\" run --if-present build && pnpm --recursive --filter \"./apps/*\" run --if-present build",
     "typecheck": "pnpm --recursive --filter \"./packages/*\" run --if-present build && pnpm --recursive --filter \"./packages/*\" run --if-present typecheck && pnpm --recursive --filter \"./apps/*\" run --if-present typecheck",
-    "test": "pnpm --recursive --filter \"./packages/*\" run --if-present build && pnpm --recursive --filter \"./packages/*\" run --if-present test && pnpm --recursive --filter \"./apps/*\" run --if-present test"
+    "test": "pnpm --recursive --filter \"./packages/*\" run --if-present build && pnpm --recursive --filter \"./packages/*\" run --if-present test && pnpm --recursive --filter \"./apps/*\" run --if-present test",
+    "test:e2e": "playwright test",
+    "test:live": "node tests/live-smoke.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

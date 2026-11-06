@@ -45,6 +45,8 @@ docs                 设计、实施计划与部署说明
 
 第一版提供流式对话、会话历史、工具状态、停止生成和示例 Skill/工具。示例工具只返回演示数据，用于验证扩展链路。真实业务 MCP、Java 登录鉴权、模型管理与用量统计随产品集成逐步加入。
 
+![助手展开模式](docs/screenshots/assistant-expanded.png)
+
 ## 构建与检查
 
 ```sh
@@ -60,6 +62,14 @@ pnpm test:e2e
 ```
 
 Windows 默认使用已安装的 Edge。其他系统先运行 `pnpm exec playwright install chromium`。
+
+服务启动并配置模型后，可单独运行真实模型接入检查：
+
+```sh
+pnpm test:live
+```
+
+该命令实际调用服务端配置的模型，验证文本、多轮上下文、Skill 读取和工具调用，并保留名为“模型接入自检”的会话。它不参与默认测试或 CI。
 
 根脚本先构建共享协议，再处理应用。生产运行方式、数据目录和嵌入边界见 [部署说明](docs/deployment.md)。
 
